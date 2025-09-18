@@ -8,7 +8,6 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    // manpages
     {
         var man_step = zzdoc.addManpageStep(b, .{
             .root_doc_dir = b.path("docs/"),
@@ -25,12 +24,10 @@ pub fn build(b: *std.Build) void {
     });
 
     const io_dep = b.dependency("ourio", .{ .optimize = optimize, .target = target });
-    const io_mod = io_dep.module("ourio");
-    exe_mod.addImport("ourio", io_mod);
+    exe_mod.addImport("ourio", io_dep.module("ourio"));
 
     const zeit_dep = b.dependency("zeit", .{ .optimize = optimize, .target = target });
-    const zeit_mod = zeit_dep.module("zeit");
-    exe_mod.addImport("zeit", zeit_mod);
+    exe_mod.addImport("zeit", zeit_dep.module("zeit"));
 
     const opts = b.addOptions();
     const version_string = genVersion(b) catch |err| {
@@ -38,33 +35,27 @@ pub fn build(b: *std.Build) void {
         @compileError("couldn't get version");
     };
     opts.addOption([]const u8, "version", version_string);
-
     exe_mod.addOptions("build_options", opts);
 
     const exe = b.addExecutable(.{
         .name = "lsr",
         .root_module = exe_mod,
     });
-
+    // exe.linkLibC();
     b.installArtifact(exe);
 
+    // run
     const run_cmd = b.addRunArtifact(exe);
-
     run_cmd.step.dependOn(b.getInstallStep());
-
-    if (b.args) |args| {
-        run_cmd.addArgs(args);
-    }
-
+    if (b.args) |args| run_cmd.addArgs(args);
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_cmd.step);
 
+    // unit tests
     const exe_unit_tests = b.addTest(.{
         .root_module = exe_mod,
     });
-
     const run_exe_unit_tests = b.addRunArtifact(exe_unit_tests);
-
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&run_exe_unit_tests.step);
 }

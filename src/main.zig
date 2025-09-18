@@ -4,12 +4,15 @@ const ourio = @import("ourio");
 const zeit = @import("zeit");
 const natord = @import("natord.zig");
 const build_options = @import("build_options");
+// const grp = @cImport({
+//     @cInclude("grp.h");
+// });
 
 const posix = std.posix;
 
 const usage =
     \\Usage: 
-    \\  lsr [options] [path]
+    \\  lsr [options] [path...]
     \\
     \\  --help                           Print this message and exit
     \\  --version                        Print the version string
@@ -26,6 +29,7 @@ const usage =
     \\  -l, --long                       Display extended file metadata
     \\  -r, --reverse                    Reverse the sort order
     \\  -t, --time                       Sort the entries by modification time, most recent first
+    \\      --tree[=DEPTH]               Display entries in a tree format (optional limit depth)
     \\
 ;
 
@@ -42,8 +46,10 @@ const Options = struct {
     long: bool = false,
     sort_by_mod_time: bool = false,
     reverse_sort: bool = false,
+    tree: bool = false,
+    tree_depth: ?usize = null,
 
-    directory: [:0]const u8 = ".",
+    directories: std.ArrayListUnmanaged([:0]const u8) = .empty,
     file: ?[]const u8 = null,
 
     winsize: ?posix.winsize = null,
@@ -146,13 +152,18 @@ pub fn main() !void {
 
     var cmd: Command = .{ .arena = allocator };
 
-    cmd.opts.winsize = getWinsize(std.io.getStdOut().handle);
+    cmd.opts.winsize = getWinsize(std.fs.File.stdout().handle);
 
     cmd.opts.shortview = if (cmd.opts.isatty()) .columns else .oneline;
 
-    const stdout = std.io.getStdOut().writer();
-    const stderr = std.io.getStdErr().writer();
-    var bw = std.io.bufferedWriter(stdout);
+    var stdout_buffer: [4096]u8 = undefined;
+
+    var stderr_buffer: [1024]u8 = undefined;
+
+    var stdout = std.fs.File.stdout().writer(&stdout_buffer);
+    var stderr = std.fs.File.stderr().writer(&stderr_buffer).interface;
+    // var bw = std.Io.Writer.buffered
+    var bw = &stdout.interface;
 
     var args = std.process.args();
     // skip binary
@@ -172,7 +183,7 @@ pub fn main() !void {
                         'r' => cmd.opts.reverse_sort = true,
                         't' => cmd.opts.sort_by_mod_time = true,
                         else => {
-                            try stderr.print("Invalid opt: '{c}'", .{b});
+                            try stderr.print("Invalid opt: '{c}'\n", .{b});
                             std.process.exit(1);
                         },
                     }
@@ -184,76 +195,87 @@ pub fn main() !void {
                 const val = split.rest();
                 if (eql(opt, "all")) {
                     cmd.opts.all = parseArgBool(val) orelse {
-                        try stderr.print("Invalid boolean: '{s}'", .{val});
+                        try stderr.print("Invalid boolean: '{s}'\n", .{val});
                         std.process.exit(1);
                     };
                 } else if (eql(opt, "long")) {
                     cmd.opts.long = parseArgBool(val) orelse {
-                        try stderr.print("Invalid boolean: '{s}'", .{val});
+                        try stderr.print("Invalid boolean: '{s}'\n", .{val});
                         std.process.exit(1);
                     };
                 } else if (eql(opt, "almost-all")) {
                     cmd.opts.@"almost-all" = parseArgBool(val) orelse {
-                        try stderr.print("Invalid boolean: '{s}'", .{val});
+                        try stderr.print("Invalid boolean: '{s}'\n", .{val});
                         std.process.exit(1);
                     };
                 } else if (eql(opt, "group-directories-first")) {
                     cmd.opts.@"group-directories-first" = parseArgBool(val) orelse {
-                        try stderr.print("Invalid boolean: '{s}'", .{val});
+                        try stderr.print("Invalid boolean: '{s}'\n", .{val});
                         std.process.exit(1);
                     };
                 } else if (eql(opt, "color")) {
                     cmd.opts.color = std.meta.stringToEnum(Options.When, val) orelse {
-                        try stderr.print("Invalid color option: '{s}'", .{val});
+                        try stderr.print("Invalid color option: '{s}'\n", .{val});
                         std.process.exit(1);
                     };
                 } else if (eql(opt, "human-readable")) {
                     // no-op: present for compatibility
                 } else if (eql(opt, "hyperlinks")) {
                     cmd.opts.hyperlinks = std.meta.stringToEnum(Options.When, val) orelse {
-                        try stderr.print("Invalid hyperlinks option: '{s}'", .{val});
+                        try stderr.print("Invalid hyperlinks option: '{s}'\n", .{val});
                         std.process.exit(1);
                     };
                 } else if (eql(opt, "icons")) {
                     cmd.opts.icons = std.meta.stringToEnum(Options.When, val) orelse {
-                        try stderr.print("Invalid color option: '{s}'", .{val});
+                        try stderr.print("Invalid color option: '{s}'\n", .{val});
                         std.process.exit(1);
                     };
                 } else if (eql(opt, "columns")) {
                     const c = parseArgBool(val) orelse {
-                        try stderr.print("Invalid columns option: '{s}'", .{val});
+                        try stderr.print("Invalid columns option: '{s}'\n", .{val});
                         std.process.exit(1);
                     };
                     cmd.opts.shortview = if (c) .columns else .oneline;
                 } else if (eql(opt, "oneline")) {
                     const o = parseArgBool(val) orelse {
-                        try stderr.print("Invalid oneline option: '{s}'", .{val});
+                        try stderr.print("Invalid oneline option: '{s}'\n", .{val});
                         std.process.exit(1);
                     };
                     cmd.opts.shortview = if (o) .oneline else .columns;
                 } else if (eql(opt, "time")) {
                     cmd.opts.sort_by_mod_time = parseArgBool(val) orelse {
-                        try stderr.print("Invalid boolean: '{s}'", .{val});
+                        try stderr.print("Invalid boolean: '{s}'\n", .{val});
                         std.process.exit(1);
                     };
                 } else if (eql(opt, "reverse")) {
                     cmd.opts.reverse_sort = parseArgBool(val) orelse {
-                        try stderr.print("Invalid boolean: '{s}'", .{val});
+                        try stderr.print("Invalid boolean: '{s}'\n", .{val});
                         std.process.exit(1);
                     };
+                } else if (eql(opt, "tree")) {
+                    if (val.len == 0) {
+                        cmd.opts.tree = true;
+                        cmd.opts.tree_depth = null; // unlimited depth
+                    } else {
+                        cmd.opts.tree = true;
+                        cmd.opts.tree_depth = std.fmt.parseInt(usize, val, 10) catch {
+                            try stderr.print("Invalid tree depth: '{s}'\n", .{val});
+                            std.process.exit(1);
+                        };
+                    }
                 } else if (eql(opt, "help")) {
                     return stderr.writeAll(usage);
                 } else if (eql(opt, "version")) {
-                    try bw.writer().print("lsr {s}\r\n", .{build_options.version});
+                    try bw.print("lsr {s}\r\n", .{build_options.version});
                     try bw.flush();
                     return;
                 } else {
-                    try stderr.print("Invalid opt: '{s}'", .{opt});
+                    try stderr.print("Invalid opt: '{s}'\n", .{opt});
                     std.process.exit(1);
                 }
             },
             .positional => {
-                cmd.opts.directory = arg;
+                try cmd.opts.directories.append(allocator, arg);
             },
         }
     }
@@ -262,48 +284,78 @@ pub fn main() !void {
         cmd.opts.colors = .default;
     }
 
-    var ring: ourio.Ring = try .init(allocator, queue_size);
-    defer ring.deinit();
-
-    _ = try ring.open(cmd.opts.directory, .{ .DIRECTORY = true, .CLOEXEC = true }, 0, .{
-        .ptr = &cmd,
-        .cb = onCompletion,
-        .msg = @intFromEnum(Msg.cwd),
-    });
-
-    if (cmd.opts.long) {
-        _ = try ring.open("/etc/localtime", .{ .CLOEXEC = true }, 0, .{
-            .ptr = &cmd,
-            .cb = onCompletion,
-            .msg = @intFromEnum(Msg.localtime),
-        });
-        _ = try ring.open("/etc/passwd", .{ .CLOEXEC = true }, 0, .{
-            .ptr = &cmd,
-            .cb = onCompletion,
-            .msg = @intFromEnum(Msg.passwd),
-        });
-        _ = try ring.open("/etc/group", .{ .CLOEXEC = true }, 0, .{
-            .ptr = &cmd,
-            .cb = onCompletion,
-            .msg = @intFromEnum(Msg.group),
-        });
+    if (cmd.opts.directories.items.len == 0) {
+        try cmd.opts.directories.append(allocator, ".");
     }
 
-    try ring.run(.until_done);
+    const multiple_dirs = cmd.opts.directories.items.len > 1;
 
-    if (cmd.entries.len == 0) return;
+    for (cmd.opts.directories.items, 0..) |directory, dir_idx| {
+        cmd.entries = &.{};
+        cmd.entry_idx = 0;
+        cmd.symlinks.clearRetainingCapacity();
+        cmd.groups.clearRetainingCapacity();
+        cmd.users.clearRetainingCapacity();
+        cmd.tz = null;
+        cmd.opts.file = null;
+        cmd.current_directory = directory;
 
-    std.sort.pdq(Entry, cmd.entries, cmd.opts, Entry.lessThan);
+        var ring: ourio.Ring = try .init(allocator, queue_size);
+        defer ring.deinit();
 
-    if (cmd.opts.reverse_sort) {
-        std.mem.reverse(Entry, cmd.entries);
-    }
+        _ = try ring.open(directory, .{ .DIRECTORY = true, .CLOEXEC = true }, 0, .{
+            .ptr = &cmd,
+            .cb = onCompletion,
+            .msg = @intFromEnum(Msg.cwd),
+        });
 
-    if (cmd.opts.long) {
-        try printLong(cmd, bw.writer());
-    } else switch (cmd.opts.shortview) {
-        .columns => try printShortColumns(cmd, bw.writer()),
-        .oneline => try printShortOnePerLine(cmd, bw.writer()),
+        if (cmd.opts.long) {
+            _ = try ring.open("/etc/localtime", .{ .CLOEXEC = true }, 0, .{
+                .ptr = &cmd,
+                .cb = onCompletion,
+                .msg = @intFromEnum(Msg.localtime),
+            });
+            _ = try ring.open("/etc/passwd", .{ .CLOEXEC = true }, 0, .{
+                .ptr = &cmd,
+                .cb = onCompletion,
+                .msg = @intFromEnum(Msg.passwd),
+            });
+            _ = try ring.open("/etc/group", .{ .CLOEXEC = true }, 0, .{
+                .ptr = &cmd,
+                .cb = onCompletion,
+                .msg = @intFromEnum(Msg.group),
+            });
+        }
+
+        try ring.run(.until_done);
+
+        if (cmd.entries.len == 0) {
+            if (multiple_dirs and dir_idx < cmd.opts.directories.items.len - 1) {
+                try bw.writeAll("\r\n");
+            }
+            continue;
+        }
+
+        std.sort.pdq(Entry, cmd.entries, cmd.opts, Entry.lessThan);
+
+        if (cmd.opts.reverse_sort) {
+            std.mem.reverse(Entry, cmd.entries);
+        }
+
+        if (multiple_dirs and !cmd.opts.tree) {
+            if (dir_idx > 0) try bw.writeAll("\r\n");
+            try bw.print("{s}:\r\n", .{directory});
+        }
+
+        if (cmd.opts.tree) {
+            if (multiple_dirs and dir_idx > 0) try bw.writeAll("\r\n");
+            try printTree(cmd, bw);
+        } else if (cmd.opts.long) {
+            try printLong(&cmd, bw);
+        } else switch (cmd.opts.shortview) {
+            .columns => try printShortColumns(cmd, bw),
+            .oneline => try printShortOnePerLine(cmd, bw),
+        }
     }
     try bw.flush();
 }
@@ -382,14 +434,14 @@ fn printShortColumns(cmd: Command, writer: anytype) !void {
 
             if (i < columns.items.len - 1) {
                 const spaces = column.width - (icon_width + entry.name.len);
-                try writer.writeByteNTimes(' ', spaces);
+                try writer.splatByteAll(' ', spaces);
             }
         }
         try writer.writeAll("\r\n");
     }
 }
 
-fn isShortColumn(idx: usize, n_cols: usize, n_short_cols: usize) bool {
+inline fn isShortColumn(idx: usize, n_cols: usize, n_short_cols: usize) bool {
     return idx + n_short_cols >= n_cols;
 }
 
@@ -397,7 +449,7 @@ fn printShortEntry(entry: Entry, cmd: Command, writer: anytype) !void {
     const opts = cmd.opts;
     const colors = opts.colors;
     if (opts.useIcons()) {
-        const icon = Icon.get(entry, opts);
+        const icon = Icon.get(entry);
 
         if (opts.useColor()) {
             try writer.writeAll(icon.color);
@@ -420,7 +472,7 @@ fn printShortEntry(entry: Entry, cmd: Command, writer: anytype) !void {
     }
 
     if (opts.useHyperlinks()) {
-        const path = try std.fs.path.join(cmd.arena, &.{ opts.directory, entry.name });
+        const path = try std.fs.path.join(cmd.arena, &.{ cmd.current_directory, entry.name });
         try writer.print("\x1b]8;;file://{s}\x1b\\", .{path});
         try writer.writeAll(entry.name);
         try writer.writeAll("\x1b]8;;\x1b\\");
@@ -446,7 +498,141 @@ fn printShortOnePerLine(cmd: Command, writer: anytype) !void {
     }
 }
 
-fn printLong(cmd: Command, writer: anytype) !void {
+fn drawTreePrefix(writer: anytype, prefix_list: []const bool, is_last: bool) !void {
+    for (prefix_list) |is_last_at_level| {
+        if (is_last_at_level) {
+            try writer.writeAll("    ");
+        } else {
+            try writer.writeAll("│   ");
+        }
+    }
+
+    if (is_last) {
+        try writer.writeAll("└── ");
+    } else {
+        try writer.writeAll("├── ");
+    }
+}
+
+fn printTree(cmd: Command, writer: anytype) !void {
+    const dir_name = if (std.mem.eql(u8, cmd.current_directory, ".")) blk: {
+        var buf: [std.fs.max_path_bytes]u8 = undefined;
+        const cwd = try std.process.getCwd(&buf);
+        break :blk std.fs.path.basename(cwd);
+    } else std.fs.path.basename(cmd.current_directory);
+
+    try writer.print("{s}\n", .{dir_name});
+
+    const max_depth = cmd.opts.tree_depth orelse std.math.maxInt(usize);
+    var prefix_list = std.array_list.Managed(bool).init(cmd.arena);
+
+    for (cmd.entries, 0..) |entry, i| {
+        const is_last = i == cmd.entries.len - 1;
+
+        try drawTreePrefix(writer, prefix_list.items, is_last);
+        try printShortEntry(entry, cmd, writer);
+        try writer.writeAll("\r\n");
+
+        if (entry.kind == .directory and max_depth > 0) {
+            const full_path = try std.fs.path.joinZ(cmd.arena, &.{ cmd.current_directory, entry.name });
+
+            try prefix_list.append(is_last);
+            try recurseTree(cmd, writer, full_path, &prefix_list, 1, max_depth);
+
+            _ = prefix_list.pop();
+        }
+    }
+}
+
+fn recurseTree(cmd: Command, writer: anytype, dir_path: [:0]const u8, prefix_list: *std.array_list.Managed(bool), depth: usize, max_depth: usize) !void {
+    var dir = std.fs.cwd().openDir(dir_path, .{ .iterate = true }) catch {
+        return;
+    };
+    defer dir.close();
+
+    var entries = std.array_list.Managed(Entry).init(cmd.arena);
+    var iter = dir.iterate();
+
+    while (try iter.next()) |dirent| {
+        if (!cmd.opts.showDotfiles() and std.mem.startsWith(u8, dirent.name, ".")) continue;
+
+        const nameZ = try cmd.arena.dupeZ(u8, dirent.name);
+        try entries.append(.{
+            .name = nameZ,
+            .kind = dirent.kind,
+            .statx = undefined,
+        });
+    }
+
+    std.sort.pdq(Entry, entries.items, cmd.opts, Entry.lessThan);
+
+    if (cmd.opts.reverse_sort) {
+        std.mem.reverse(Entry, entries.items);
+    }
+
+    for (entries.items, 0..) |entry, i| {
+        const is_last = i == entries.items.len - 1;
+
+        try drawTreePrefix(writer, prefix_list.items, is_last);
+        try printTreeEntry(entry, cmd, writer, dir_path);
+        try writer.writeAll("\r\n");
+
+        if (entry.kind == .directory and depth < max_depth) {
+            const full_path = try std.fs.path.joinZ(cmd.arena, &.{ dir_path, entry.name });
+
+            try prefix_list.append(is_last);
+            try recurseTree(cmd, writer, full_path, prefix_list, depth + 1, max_depth);
+
+            _ = prefix_list.pop();
+        }
+    }
+}
+
+fn printTreeEntry(entry: Entry, cmd: Command, writer: anytype, dir_path: [:0]const u8) !void {
+    const opts = cmd.opts;
+    const colors = opts.colors;
+
+    if (opts.useIcons()) {
+        const icon = Icon.get(entry);
+
+        if (opts.useColor()) {
+            try writer.writeAll(icon.color);
+            try writer.writeAll(icon.icon);
+            try writer.writeAll(colors.reset);
+        } else {
+            try writer.writeAll(icon.icon);
+        }
+
+        try writer.writeByte(' ');
+    }
+
+    switch (entry.kind) {
+        .directory => try writer.writeAll(colors.dir),
+        .sym_link => try writer.writeAll(colors.symlink),
+        else => {
+            const full_path = try std.fs.path.join(cmd.arena, &.{ dir_path, entry.name });
+            const stat_result = std.fs.cwd().statFile(full_path) catch null;
+            if (stat_result) |stat| {
+                if (stat.mode & (std.posix.S.IXUSR | std.posix.S.IXGRP | std.posix.S.IXOTH) != 0) {
+                    try writer.writeAll(colors.executable);
+                }
+            }
+        },
+    }
+
+    if (opts.useHyperlinks()) {
+        const path = try std.fs.path.join(cmd.arena, &.{ dir_path, entry.name });
+        try writer.print("\x1b]8;;file://{s}\x1b\\", .{path});
+        try writer.writeAll(entry.name);
+        try writer.writeAll("\x1b]8;;\x1b\\");
+        try writer.writeAll(colors.reset);
+    } else {
+        try writer.writeAll(entry.name);
+        try writer.writeAll(colors.reset);
+    }
+}
+
+fn printLong(cmd: *Command, writer: anytype) !void {
     const tz = cmd.tz.?;
     const now = zeit.instant(.{}) catch unreachable;
     const one_year_ago = try now.subtract(.{ .days = 365 });
@@ -458,8 +644,8 @@ fn printLong(cmd: Command, writer: anytype) !void {
         var n_size: usize = 0;
         var n_suff: usize = 0;
         for (cmd.entries) |entry| {
-            const group = cmd.getGroup(entry.statx.gid);
-            const user = cmd.getUser(entry.statx.uid);
+            const group = try cmd.getGroup(entry.statx.gid);
+            const user = try cmd.getUser(entry.statx.uid);
 
             var buf: [16]u8 = undefined;
             const size = try entry.humanReadableSize(&buf);
@@ -490,12 +676,12 @@ fn printLong(cmd: Command, writer: anytype) !void {
     };
 
     for (cmd.entries) |entry| {
-        const user: User = cmd.getUser(entry.statx.uid) orelse
+        const user: User = try cmd.getUser(entry.statx.uid) orelse
             .{
                 .uid = entry.statx.uid,
                 .name = try std.fmt.allocPrint(cmd.arena, "{d}", .{entry.statx.uid}),
             };
-        const group: Group = cmd.getGroup(entry.statx.gid) orelse
+        const group: Group = try cmd.getGroup(entry.statx.gid) orelse
             .{
                 .gid = entry.statx.gid,
                 .name = try std.fmt.allocPrint(cmd.arena, "{d}", .{entry.statx.gid}),
@@ -509,21 +695,21 @@ fn printLong(cmd: Command, writer: anytype) !void {
         try writer.writeAll(&mode);
         try writer.writeByte(' ');
         try writer.writeAll(user.name);
-        try writer.writeByteNTimes(' ', longest_user - user.name.len);
+        try writer.splatByteAll(' ', longest_user - user.name.len);
         try writer.writeByte(' ');
         try writer.writeAll(group.name);
-        try writer.writeByteNTimes(' ', longest_group - group.name.len);
+        try writer.splatByteAll(' ', longest_group - group.name.len);
         try writer.writeByte(' ');
 
         var size_buf: [16]u8 = undefined;
         const size = try entry.humanReadableSize(&size_buf);
         const suffix = entry.humanReadableSuffix();
 
-        try writer.writeByteNTimes(' ', longest_size - size.len);
+        try writer.splatByteAll(' ', longest_size - size.len);
         try writer.writeAll(size);
         try writer.writeByte(' ');
         try writer.writeAll(suffix);
-        try writer.writeByteNTimes(' ', longest_suffix - suffix.len);
+        try writer.splatByteAll(' ', longest_suffix - suffix.len);
         try writer.writeByte(' ');
 
         try writer.print("{d: >2} {s} ", .{
@@ -538,7 +724,7 @@ fn printLong(cmd: Command, writer: anytype) !void {
         }
 
         if (cmd.opts.useIcons()) {
-            const icon = Icon.get(entry, cmd.opts);
+            const icon = Icon.get(entry);
 
             if (cmd.opts.useColor()) {
                 try writer.writeAll(icon.color);
@@ -562,7 +748,7 @@ fn printLong(cmd: Command, writer: anytype) !void {
         }
 
         if (cmd.opts.useHyperlinks()) {
-            const path = try std.fs.path.join(cmd.arena, &.{ cmd.opts.directory, entry.name });
+            const path = try std.fs.path.join(cmd.arena, &.{ cmd.current_directory, entry.name });
             try writer.print("\x1b]8;;file://{s}\x1b\\", .{path});
             try writer.writeAll(entry.name);
             try writer.writeAll("\x1b]8;;\x1b\\");
@@ -606,22 +792,41 @@ const Command = struct {
     entries: []Entry = &.{},
     entry_idx: usize = 0,
     symlinks: std.StringHashMapUnmanaged(Symlink) = .empty,
+    current_directory: [:0]const u8 = ".",
 
     tz: ?zeit.TimeZone = null,
     groups: std.ArrayListUnmanaged(Group) = .empty,
     users: std.ArrayListUnmanaged(User) = .empty,
 
-    fn getUser(self: Command, uid: posix.uid_t) ?User {
+    fn getUser(self: *Command, uid: posix.uid_t) !?User {
         for (self.users.items) |user| {
             if (user.uid == uid) return user;
         }
+        // if (std.c.getpwuid(uid)) |user| {
+        //     if (user.name) |name| {
+        //         const new_user = User{
+        //             .uid = uid,
+        //             .name = std.mem.span(name),
+        //         };
+        //         try self.users.append(self.arena, new_user);
+        //         return new_user;
+        //     }
+        // }
         return null;
     }
 
-    fn getGroup(self: Command, gid: posix.gid_t) ?Group {
+    fn getGroup(self: *Command, gid: posix.gid_t) !?Group {
         for (self.groups.items) |group| {
             if (group.gid == gid) return group;
         }
+        // if (grp.getgrgid(gid)) |group| {
+        //     const new_group = Group{
+        //         .gid = gid,
+        //         .name = std.mem.span(group.*.gr_name),
+        //     };
+        //     try self.groups.append(self.arena, new_group);
+        //     return new_group;
+        // }
         return null;
     }
 };
@@ -786,11 +991,11 @@ fn onCompletion(io: *ourio.Ring, task: ourio.Task) anyerror!void {
 
                         // if the user specified a file (or something that couldn't be opened as a
                         // directory), then we open it's parent and apply a filter
-                        const dirname = std.fs.path.dirname(cmd.opts.directory) orelse ".";
-                        cmd.opts.file = std.fs.path.basename(cmd.opts.directory);
-                        cmd.opts.directory = try cmd.arena.dupeZ(u8, dirname);
+                        const dirname = std.fs.path.dirname(cmd.current_directory) orelse ".";
+                        cmd.opts.file = std.fs.path.basename(cmd.current_directory);
+                        cmd.current_directory = try cmd.arena.dupeZ(u8, dirname);
                         _ = try io.open(
-                            cmd.opts.directory,
+                            cmd.current_directory,
                             .{ .DIRECTORY = true, .CLOEXEC = true },
                             0,
                             .{
@@ -811,7 +1016,7 @@ fn onCompletion(io: *ourio.Ring, task: ourio.Task) anyerror!void {
             if (cmd.opts.useHyperlinks()) {
                 var buf: [std.fs.max_path_bytes]u8 = undefined;
                 const cwd = try std.os.getFdPath(fd, &buf);
-                cmd.opts.directory = try cmd.arena.dupeZ(u8, cwd);
+                cmd.current_directory = try cmd.arena.dupeZ(u8, cwd);
             }
 
             var temp_results: std.ArrayListUnmanaged(MinimalEntry) = .empty;
@@ -873,7 +1078,7 @@ fn onCompletion(io: *ourio.Ring, task: ourio.Task) anyerror!void {
                 }
                 const path = try std.fs.path.joinZ(
                     cmd.arena,
-                    &.{ cmd.opts.directory, entry.name },
+                    &.{ cmd.current_directory, entry.name },
                 );
 
                 if (entry.kind == .sym_link) {
@@ -909,8 +1114,8 @@ fn onCompletion(io: *ourio.Ring, task: ourio.Task) anyerror!void {
             const n = try result.read;
             _ = try io.close(task.req.read.fd, .{});
             const bytes = task.req.read.buffer[0..n];
-            var fbs = std.io.fixedBufferStream(bytes);
-            const tz = try zeit.timezone.TZInfo.parse(cmd.arena, fbs.reader());
+            var fbs = std.Io.Reader.fixed(bytes);
+            const tz = try zeit.timezone.TZInfo.parse(cmd.arena, &fbs);
             cmd.tz = .{ .tzinfo = tz };
         },
 
@@ -1040,7 +1245,7 @@ fn onCompletion(io: *ourio.Ring, task: ourio.Task) anyerror!void {
             cmd.entry_idx += 1;
             const path = try std.fs.path.joinZ(
                 cmd.arena,
-                &.{ cmd.opts.directory, entry.name },
+                &.{ cmd.current_directory, entry.name },
             );
 
             if (entry.kind == .sym_link) {
@@ -1128,23 +1333,23 @@ const Icon = struct {
         .{ "zon", Icon.zig },
     });
 
-    fn get(entry: Entry, opts: Options) Icon {
+    fn get(entry: Entry) Icon {
         // 1. By name
-        // 2. By extension
-        // 3. By type
+        // 2. By type
+        // 3. By extension
         if (by_name.get(entry.name)) |icon| return icon;
-
-        const ext = std.fs.path.extension(entry.name);
-        if (ext.len > 0) {
-            const ft = ext[1..];
-            if (by_extension.get(ft)) |icon| return icon;
-        }
 
         switch (entry.kind) {
             .block_device => return drive,
             .character_device => return drive,
             .directory => return directory,
             .file => {
+                const ext = std.fs.path.extension(entry.name);
+                if (ext.len > 0) {
+                    const ft = ext[1..];
+                    if (by_extension.get(ft)) |icon| return icon;
+                }
+
                 if (entry.isExecutable()) {
                     return executable;
                 }
@@ -1152,7 +1357,7 @@ const Icon = struct {
             },
             .named_pipe => return pipe,
             .sym_link => {
-                if (opts.long and posix.S.ISDIR(entry.statx.mode)) {
+                if (posix.S.ISDIR(entry.statx.mode)) {
                     return symlink_dir;
                 }
                 return symlink;
@@ -1163,11 +1368,11 @@ const Icon = struct {
     }
 };
 
-fn eql(a: []const u8, b: []const u8) bool {
+inline fn eql(a: []const u8, b: []const u8) bool {
     return std.mem.eql(u8, a, b);
 }
 
-fn parseArgBool(arg: []const u8) ?bool {
+inline fn parseArgBool(arg: []const u8) ?bool {
     if (arg.len == 0) return true;
 
     if (std.ascii.eqlIgnoreCase(arg, "true")) return true;
@@ -1179,7 +1384,7 @@ fn parseArgBool(arg: []const u8) ?bool {
 }
 
 /// getWinsize gets the window size of the output. Returns null if output is not a terminal
-fn getWinsize(fd: posix.fd_t) ?posix.winsize {
+inline fn getWinsize(fd: posix.fd_t) ?posix.winsize {
     var winsize: posix.winsize = .{
         .row = 0,
         .col = 0,
@@ -1194,7 +1399,7 @@ fn getWinsize(fd: posix.fd_t) ?posix.winsize {
     }
 }
 
-fn optKind(a: []const u8) enum { short, long, positional } {
+inline fn optKind(a: []const u8) enum { short, long, positional } {
     if (std.mem.startsWith(u8, a, "--")) return .long;
     if (std.mem.startsWith(u8, a, "-")) return .short;
     return .positional;
