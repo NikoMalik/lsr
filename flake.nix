@@ -1,44 +1,32 @@
 {
   inputs = {
-    utils.url = "github:numtide/flake-utils/main";
+    utils.url = "github:numtide/flake-utils";
     nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
   };
 
   outputs = { self, nixpkgs, utils }:
-    utils.lib.eachDefaultSystem(system:
+    utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs { inherit system; };
-        cache = import ./nix/cache.nix { inherit pkgs; };
+        zigMusl = pkgs.zig.overrideAttrs (old: {
+          buildInputs = [ pkgs.musl ];
+          configurePhase = ''
+            export ZIG_LOCAL_CACHE_DIR=$TMPDIR/zig-cache
+            export ZIG_GLOBAL_CACHE_DIR=$TMPDIR/zig-global-cache
+            export CC="${pkgs.musl.dev}/bin/musl-gcc"
+            export CFLAGS="-static"
+          '';
+        });
+        cache = import ./nix/cache.nix { inherit pkgs zigMusl; };
       in {
-        devshells.default = pkgs.mkShell {
-          nativeBuildInputs = with pkgs; [ zig zls ];
-        };
-
-        packages.default = pkgs.stdenv.mkDerivation {
-          pname = "lsr";
-          version = "1.0.0";
-          doCheck = false;
-          src = ./.;
-
-          nativeBuildInputs = with pkgs; [ zig ];
-
-          buildPhase = ''
-            export ZIG_GLOBAL_CACHE_DIR=$(mktemp -d)
-            ln -sf ${cache} $ZIG_GLOBAL_CACHE_DIR/p
-            zig build -Doptimize=ReleaseFast --summary all
-          '';
-
-          installPhase = ''
-            install -Ds -m755 zig-out/bin/lsr $out/bin/lsr
-          '';
-
-          meta = with pkgs.lib; {
-            description = "ls(1) but with io_uring";
-            homepage = "https://tangled.sh/@rockorager.dev/lsr";
-            maintainers = with maintainers; [ rockorager ];
-            platforms = platforms.linux;
-            license = licenses.mit;
-          };
-        };
+        packages.default = pkgs.runCommand "lsr" {
+          nativeBuildInputs = [ zigMusl ];
+        } ''
+          export ZIG_GLOBAL_CACHE_DIR=$(mktemp -d)
+          ln -sf ${cache} $ZIG_GLOBAL_CACHE_DIR/p
+          zig build -Doptimize=ReleaseFast -Dtarget=x86_64-linux-musl --summary all
+          mkdir -p $out/bin
+          install -m755 zig-out/bin/lsr $out/bin/lsr
+        '';
       });
 }

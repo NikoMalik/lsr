@@ -145,7 +145,6 @@ pub fn main() !void {
     };
 
     var arena = std.heap.ArenaAllocator.init(gpa);
-    defer arena.deinit();
 
     var sfb = std.heap.stackFallback(1 << 20, arena.allocator());
     const allocator = sfb.get();
@@ -1036,32 +1035,24 @@ fn onCompletion(io: *ourio.Ring, task: ourio.Task) anyerror!void {
                 });
             }
 
+            var results: std.ArrayListUnmanaged(Entry) = try .initCapacity(cmd.arena, queue_size);
             var iter = dir.iterate();
             while (try iter.next()) |dirent| {
                 if (!cmd.opts.showDotfiles() and std.mem.startsWith(u8, dirent.name, ".")) continue;
                 if (cmd.opts.file) |file| {
-                    if (eql(file, dirent.name)) {
-                        const nameZ = try cmd.arena.dupeZ(u8, dirent.name);
-                        try temp_results.append(cmd.arena, .{
-                            .name = nameZ,
-                            .kind = dirent.kind,
-                        });
-                    }
-                    continue;
+                    if (!eql(file, dirent.name)) continue;
                 }
                 const nameZ = try cmd.arena.dupeZ(u8, dirent.name);
-                try temp_results.append(cmd.arena, .{
+                results.appendAssumeCapacity(.{
                     .name = nameZ,
                     .kind = dirent.kind,
+                    .statx = undefined,
                 });
             }
-
+            cmd.entries = results.items;
             // sort the entries on the minimal struct. This has better memory locality since it is
             // much smaller than bringing in the ourio.Statx struct
             std.sort.pdq(MinimalEntry, temp_results.items, cmd.opts, MinimalEntry.lessThan);
-
-            var results: std.ArrayListUnmanaged(Entry) = .empty;
-            try results.ensureUnusedCapacity(cmd.arena, temp_results.items.len);
             for (temp_results.items) |tmp| {
                 results.appendAssumeCapacity(.{
                     .name = tmp.name,
@@ -1073,7 +1064,7 @@ fn onCompletion(io: *ourio.Ring, task: ourio.Task) anyerror!void {
 
             for (cmd.entries, 0..) |*entry, i| {
                 if (i >= queue_size) {
-                    cmd.entry_idx = i;
+                    cmd.entry_idx = i - 1;
                     break;
                 }
                 const path = try std.fs.path.joinZ(

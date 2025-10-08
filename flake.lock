@@ -51,7 +51,6 @@
       },
       "original": {
         "owner": "numtide",
-        "ref": "main",
         "repo": "flake-utils",
         "type": "github"
       }
