@@ -2,8 +2,7 @@
 pkgs.runCommand "lsr-cache" {
   nativeBuildInputs = [ zigMusl ];
 } ''
-  export ZIG_LOCAL_CACHE_DIR=$(mktemp -d)
-  export ZIG_GLOBAL_CACHE_DIR=$(mktemp -d)
-  zig build --fetch --summary none -Dtarget=x86_64-linux-musl
-  mv $ZIG_GLOBAL_CACHE_DIR/p $out
+  export ZIG_LOCAL_CACHE_DIR=$out
+  export ZIG_GLOBAL_CACHE_DIR=$out
+  zig build -Doptimize=ReleaseFast -Dtarget=x86_64-linux-musl --summary none
 ''
