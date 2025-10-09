@@ -1,0 +1,26 @@
+{
+  "ourio-0.0.0-_s-z0TEXAgBuzxuHcglN5wjvVK0UxshCdasmiXB8DchQ": {
+    "name": "ourio",
+    "url": "git+https://github.com/NikoMalik/ourio#6f7582f0d50f4604624599c563bbfa425346fd73",
+    "hash": "sha256-nfF9uZaGb3FtCzLo5+KE35j56Ma3Y54ON/GDbtJiexE=",
+    "rev": "6f7582f0d50f4604624599c563bbfa425346fd73"
+  },
+  "tls-0.1.0-ER2e0oNIBQDOLwOgkiNYg218M3CfQ8Y63KnacWSDolK3": {
+    "name": "tls",
+    "url": "git+https://github.com/NikoMalik/tls.zig#623a88ed2ac4a58045485e5dc97c95aafe829024",
+    "hash": "sha256-OfrnlfxFvJSOFIWE6tJZ35e9e0EsgKr9l1DjkpR8uSY=",
+    "rev": "623a88ed2ac4a58045485e5dc97c95aafe829024"
+  },
+  "zeit-0.6.0-5I6bk7V8AgAY0-hM-vUYtKZUFYhXct-VRkqISNNTfEfb": {
+    "name": "zeit",
+    "url": "git+https://github.com/rockorager/zeit#ade14edb2025f5e4a57b683f81c915f70a904e88",
+    "hash": "sha256-6nmgFtn2pRMZRSOTywe2kAlZ8tPLE6jHX4eWDjCe7KM=",
+    "rev": "ade14edb2025f5e4a57b683f81c915f70a904e88"
+  },
+  "zzdoc-0.0.0-tzT1Ph7cAAC5YmXQXiBJHAg41_A5AUAC5VOm7ShnUxlz": {
+    "name": "zzdoc",
+    "url": "git+https://github.com/rockorager/zzdoc#a54223bdc13a80839ccf9f473edf3a171e777946",
+    "hash": "sha256-xCCZHe9uEPJIjz8b/C+I0dr9yvthTtiLZgyG8vpecq4=",
+    "rev": "a54223bdc13a80839ccf9f473edf3a171e777946"
+  }
+}
