@@ -11,7 +11,7 @@
       system:
       let
         zig-env = zig2nix.outputs.zig-env.${system} {
-          zig = zig2nix.outputs.packages.${system}.zig-0_15_1; # Zig version
+          zig = zig2nix.outputs.packages.${system}.zig-0_15_2; # Zig version
         };
         zig-apps = zig2nix.outputs.apps.${system};
         pkgs = zig-env.pkgs;
