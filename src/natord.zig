@@ -14,7 +14,7 @@ pub fn orderIgnoreCase(a: []const u8, b: []const u8) Order {
     return natOrder(a, b, true);
 }
 
-fn natOrder(a: []const u8, b: []const u8, comptime fold_case: bool) Order {
+inline fn natOrder(a: []const u8, b: []const u8, comptime fold_case: bool) Order {
     var ai: usize = 0;
     var bi: usize = 0;
 
@@ -66,7 +66,7 @@ fn natOrder(a: []const u8, b: []const u8, comptime fold_case: bool) Order {
     }
 }
 
-fn compareLeft(a: []const u8, b: []const u8) Order {
+inline fn compareLeft(a: []const u8, b: []const u8) Order {
     var i: usize = 0;
     while (true) : (i += 1) {
         const ca = if (i == a.len) 0 else a[i];
@@ -92,7 +92,7 @@ fn compareLeft(a: []const u8, b: []const u8) Order {
     return .eq;
 }
 
-fn compareRight(a: []const u8, b: []const u8) Order {
+inline fn compareRight(a: []const u8, b: []const u8) Order {
     var bias = Order.eq;
 
     var i: usize = 0;
