@@ -151,7 +151,9 @@ pub fn main() !void {
 
     var cmd: Command = .{ .arena = allocator };
 
-    cmd.opts.winsize = getWinsize(std.fs.File.stdout().handle);
+    const _stdout = std.fs.File.stdout();
+
+    cmd.opts.winsize = getWinsize(_stdout.handle);
 
     cmd.opts.shortview = if (cmd.opts.isatty()) .columns else .oneline;
 
@@ -159,7 +161,7 @@ pub fn main() !void {
 
     var stderr_buffer: [1024]u8 = undefined;
 
-    var stdout = std.fs.File.stdout().writer(&stdout_buffer);
+    var stdout = _stdout.writer(&stdout_buffer);
     var stderr = std.fs.File.stderr().writer(&stderr_buffer).interface;
     // var bw = std.Io.Writer.buffered
     var bw = &stdout.interface;
@@ -335,7 +337,7 @@ pub fn main() !void {
             continue;
         }
 
-        std.sort.pdq(Entry, cmd.entries, cmd.opts, Entry.lessThan);
+        natord.pdq(Entry, cmd.entries, cmd.opts, Entry.lessThan);
 
         if (cmd.opts.reverse_sort) {
             std.mem.reverse(Entry, cmd.entries);
@@ -359,7 +361,7 @@ pub fn main() !void {
     try bw.flush();
 }
 
-fn printShortColumns(cmd: Command, writer: anytype) !void {
+inline fn printShortColumns(cmd: Command, writer: anytype) !void {
     const win_width = blk: {
         const ws = cmd.opts.winsize orelse break :blk 80;
         break :blk ws.col;
@@ -447,6 +449,8 @@ inline fn isShortColumn(idx: usize, n_cols: usize, n_short_cols: usize) bool {
 fn printShortEntry(entry: Entry, cmd: Command, writer: anytype) !void {
     const opts = cmd.opts;
     const colors = opts.colors;
+    var path_buf: [std.fs.max_path_bytes]u8 = undefined;
+    var path_fbs = std.heap.FixedBufferAllocator.init(&path_buf);
     if (opts.useIcons()) {
         const icon = Icon.get(entry);
 
@@ -471,7 +475,7 @@ fn printShortEntry(entry: Entry, cmd: Command, writer: anytype) !void {
     }
 
     if (opts.useHyperlinks()) {
-        const path = try std.fs.path.join(cmd.arena, &.{ cmd.current_directory, entry.name });
+        const path = try std.fs.path.join(path_fbs.allocator(), &.{ cmd.current_directory, entry.name });
         try writer.print("\x1b]8;;file://{s}\x1b\\", .{path});
         try writer.writeAll(entry.name);
         try writer.writeAll("\x1b]8;;\x1b\\");
@@ -482,7 +486,7 @@ fn printShortEntry(entry: Entry, cmd: Command, writer: anytype) !void {
     }
 }
 
-fn printShortOneRow(cmd: Command, writer: anytype) !void {
+inline fn printShortOneRow(cmd: Command, writer: anytype) !void {
     for (cmd.entries) |entry| {
         try printShortEntry(entry, cmd.opts, writer);
         try writer.writeAll("  ");
@@ -490,14 +494,14 @@ fn printShortOneRow(cmd: Command, writer: anytype) !void {
     try writer.writeAll("\r\n");
 }
 
-fn printShortOnePerLine(cmd: Command, writer: anytype) !void {
+inline fn printShortOnePerLine(cmd: Command, writer: anytype) !void {
     for (cmd.entries) |entry| {
         try printShortEntry(entry, cmd, writer);
         try writer.writeAll("\r\n");
     }
 }
 
-fn drawTreePrefix(writer: anytype, prefix_list: []const bool, is_last: bool) !void {
+inline fn drawTreePrefix(writer: anytype, prefix_list: []const bool, is_last: bool) !void {
     for (prefix_list) |is_last_at_level| {
         if (is_last_at_level) {
             try writer.writeAll("    ");
@@ -513,7 +517,7 @@ fn drawTreePrefix(writer: anytype, prefix_list: []const bool, is_last: bool) !vo
     }
 }
 
-fn printTree(cmd: Command, writer: anytype) !void {
+inline fn printTree(cmd: Command, writer: anytype) !void {
     const dir_name = if (std.mem.eql(u8, cmd.current_directory, ".")) blk: {
         var buf: [std.fs.max_path_bytes]u8 = undefined;
         const cwd = try std.process.getCwd(&buf);
@@ -521,11 +525,14 @@ fn printTree(cmd: Command, writer: anytype) !void {
     } else std.fs.path.basename(cmd.current_directory);
 
     try writer.print("{s}\n", .{dir_name});
+    var path_buf: [std.fs.max_path_bytes]u8 = undefined;
+    var path_fbs = std.heap.FixedBufferAllocator.init(&path_buf);
 
     const max_depth = cmd.opts.tree_depth orelse std.math.maxInt(usize);
     var prefix_list = std.array_list.Managed(bool).init(cmd.arena);
 
     for (cmd.entries, 0..) |entry, i| {
+        if (eql(entry.name, ".") or eql(entry.name, "..")) continue;
         const is_last = i == cmd.entries.len - 1;
 
         try drawTreePrefix(writer, prefix_list.items, is_last);
@@ -533,7 +540,7 @@ fn printTree(cmd: Command, writer: anytype) !void {
         try writer.writeAll("\r\n");
 
         if (entry.kind == .directory and max_depth > 0) {
-            const full_path = try std.fs.path.joinZ(cmd.arena, &.{ cmd.current_directory, entry.name });
+            const full_path = try std.fs.path.joinZ(path_fbs.allocator(), &.{ cmd.current_directory, entry.name });
 
             try prefix_list.append(is_last);
             try recurseTree(cmd, writer, full_path, &prefix_list, 1, max_depth);
@@ -548,7 +555,6 @@ fn recurseTree(cmd: Command, writer: anytype, dir_path: [:0]const u8, prefix_lis
         return;
     };
     defer dir.close();
-
     var entries = std.array_list.Managed(Entry).init(cmd.arena);
     var iter = dir.iterate();
 
@@ -563,7 +569,10 @@ fn recurseTree(cmd: Command, writer: anytype, dir_path: [:0]const u8, prefix_lis
         });
     }
 
-    std.sort.pdq(Entry, entries.items, cmd.opts, Entry.lessThan);
+    var path_buf: [std.fs.max_path_bytes]u8 = undefined;
+    var path_fbs = std.heap.FixedBufferAllocator.init(&path_buf);
+
+    natord.pdq(Entry, entries.items, cmd.opts, Entry.lessThan);
 
     if (cmd.opts.reverse_sort) {
         std.mem.reverse(Entry, entries.items);
@@ -577,7 +586,7 @@ fn recurseTree(cmd: Command, writer: anytype, dir_path: [:0]const u8, prefix_lis
         try writer.writeAll("\r\n");
 
         if (entry.kind == .directory and depth < max_depth) {
-            const full_path = try std.fs.path.joinZ(cmd.arena, &.{ dir_path, entry.name });
+            const full_path = try std.fs.path.joinZ(path_fbs.allocator(), &.{ dir_path, entry.name });
 
             try prefix_list.append(is_last);
             try recurseTree(cmd, writer, full_path, prefix_list, depth + 1, max_depth);
@@ -587,9 +596,12 @@ fn recurseTree(cmd: Command, writer: anytype, dir_path: [:0]const u8, prefix_lis
     }
 }
 
-fn printTreeEntry(entry: Entry, cmd: Command, writer: anytype, dir_path: [:0]const u8) !void {
+inline fn printTreeEntry(entry: Entry, cmd: Command, writer: anytype, dir_path: [:0]const u8) !void {
     const opts = cmd.opts;
     const colors = opts.colors;
+
+    var path_buf: [std.fs.max_path_bytes]u8 = undefined;
+    var path_fbs = std.heap.FixedBufferAllocator.init(&path_buf);
 
     if (opts.useIcons()) {
         const icon = Icon.get(entry);
@@ -609,7 +621,7 @@ fn printTreeEntry(entry: Entry, cmd: Command, writer: anytype, dir_path: [:0]con
         .directory => try writer.writeAll(colors.dir),
         .sym_link => try writer.writeAll(colors.symlink),
         else => {
-            const full_path = try std.fs.path.join(cmd.arena, &.{ dir_path, entry.name });
+            const full_path = try std.fs.path.join(path_fbs.allocator(), &.{ dir_path, entry.name });
             const stat_result = std.fs.cwd().statFile(full_path) catch null;
             if (stat_result) |stat| {
                 if (stat.mode & (std.posix.S.IXUSR | std.posix.S.IXGRP | std.posix.S.IXOTH) != 0) {
@@ -620,7 +632,8 @@ fn printTreeEntry(entry: Entry, cmd: Command, writer: anytype, dir_path: [:0]con
     }
 
     if (opts.useHyperlinks()) {
-        const path = try std.fs.path.join(cmd.arena, &.{ dir_path, entry.name });
+        path_fbs.reset();
+        const path = try std.fs.path.join(path_fbs.allocator(), &.{ dir_path, entry.name });
         try writer.print("\x1b]8;;file://{s}\x1b\\", .{path});
         try writer.writeAll(entry.name);
         try writer.writeAll("\x1b]8;;\x1b\\");
@@ -631,7 +644,7 @@ fn printTreeEntry(entry: Entry, cmd: Command, writer: anytype, dir_path: [:0]con
     }
 }
 
-fn printLong(cmd: *Command, writer: anytype) !void {
+inline fn printLong(cmd: *Command, writer: anytype) !void {
     const tz = cmd.tz.?;
     const now = zeit.instant(.{}) catch unreachable;
     const one_year_ago = try now.subtract(.{ .days = 365 });
@@ -846,7 +859,7 @@ const User = struct {
     uid: if (builtin.os.tag == .macos) i33 else posix.uid_t,
     name: []const u8,
 
-    fn lessThan(_: void, lhs: User, rhs: User) bool {
+    inline fn lessThan(_: void, lhs: User, rhs: User) bool {
         return lhs.uid < rhs.uid;
     }
 };
@@ -855,7 +868,7 @@ const Group = struct {
     gid: if (builtin.os.tag == .macos) i33 else posix.gid_t,
     name: []const u8,
 
-    fn lessThan(_: void, lhs: Group, rhs: Group) bool {
+    inline fn lessThan(_: void, lhs: Group, rhs: Group) bool {
         return lhs.gid < rhs.gid;
     }
 };
@@ -864,7 +877,7 @@ const MinimalEntry = struct {
     name: [:0]const u8,
     kind: std.fs.File.Kind,
 
-    fn lessThan(opts: Options, lhs: MinimalEntry, rhs: MinimalEntry) bool {
+    inline fn lessThan(opts: Options, lhs: MinimalEntry, rhs: MinimalEntry) bool {
         if (opts.@"group-directories-first" and
             lhs.kind != rhs.kind and
             (lhs.kind == .directory or rhs.kind == .directory))
@@ -886,7 +899,7 @@ const Entry = struct {
     kind: std.fs.File.Kind,
     statx: ourio.Statx,
 
-    fn lessThan(opts: Options, lhs: Entry, rhs: Entry) bool {
+    inline fn lessThan(opts: Options, lhs: Entry, rhs: Entry) bool {
         if (opts.@"group-directories-first" and
             lhs.kind != rhs.kind and
             (lhs.kind == .directory or rhs.kind == .directory))
@@ -904,7 +917,7 @@ const Entry = struct {
         return natord.orderIgnoreCase(lhs.name, rhs.name) == .lt;
     }
 
-    fn modeStr(self: Entry) [10]u8 {
+    inline fn modeStr(self: Entry) [10]u8 {
         var mode = [_]u8{'-'} ** 10;
         switch (self.kind) {
             .block_device => mode[0] = 'b',
@@ -929,7 +942,7 @@ const Entry = struct {
         return mode;
     }
 
-    fn humanReadableSuffix(self: Entry) []const u8 {
+    inline fn humanReadableSuffix(self: Entry) []const u8 {
         if (self.kind == .directory) return "-";
 
         const buckets = [_]u64{
@@ -941,7 +954,7 @@ const Entry = struct {
 
         const suffixes = [_][]const u8{ "TB", "GB", "MB", "KB" };
 
-        for (buckets, suffixes) |bucket, suffix| {
+        inline for (buckets, suffixes) |bucket, suffix| {
             if (self.statx.size >= bucket) {
                 return suffix;
             }
@@ -949,7 +962,7 @@ const Entry = struct {
         return "B";
     }
 
-    fn humanReadableSize(self: Entry, out: []u8) ![]u8 {
+    inline fn humanReadableSize(self: Entry, out: []u8) ![]u8 {
         if (self.kind == .directory) return &.{};
 
         const buckets = [_]u64{
@@ -959,7 +972,7 @@ const Entry = struct {
             1 << 10, // KB
         };
 
-        for (buckets) |bucket| {
+        inline for (buckets) |bucket| {
             if (self.statx.size >= bucket) {
                 const size_f: f64 = @floatFromInt(self.statx.size);
                 const bucket_f: f64 = @floatFromInt(bucket);
@@ -970,7 +983,7 @@ const Entry = struct {
         return std.fmt.bufPrint(out, "{d}", .{self.statx.size});
     }
 
-    fn isExecutable(self: Entry) bool {
+    inline fn isExecutable(self: Entry) bool {
         return self.statx.mode & (posix.S.IXUSR | posix.S.IXGRP | posix.S.IXOTH) != 0;
     }
 };
@@ -979,6 +992,8 @@ fn onCompletion(io: *ourio.Ring, task: ourio.Task) anyerror!void {
     const cmd = task.userdataCast(Command);
     const msg = task.msgToEnum(Msg);
     const result = task.result.?;
+    var path_buf: [std.fs.max_path_bytes]u8 = undefined;
+    var path_fbs = std.heap.FixedBufferAllocator.init(&path_buf);
 
     switch (msg) {
         .cwd => {
@@ -1035,24 +1050,32 @@ fn onCompletion(io: *ourio.Ring, task: ourio.Task) anyerror!void {
                 });
             }
 
-            var results: std.ArrayListUnmanaged(Entry) = try .initCapacity(cmd.arena, queue_size);
             var iter = dir.iterate();
             while (try iter.next()) |dirent| {
                 if (!cmd.opts.showDotfiles() and std.mem.startsWith(u8, dirent.name, ".")) continue;
                 if (cmd.opts.file) |file| {
-                    if (!eql(file, dirent.name)) continue;
+                    if (eql(file, dirent.name)) {
+                        const nameZ = try cmd.arena.dupeZ(u8, dirent.name);
+                        try temp_results.append(cmd.arena, .{
+                            .name = nameZ,
+                            .kind = dirent.kind,
+                        });
+                    }
+                    continue;
                 }
                 const nameZ = try cmd.arena.dupeZ(u8, dirent.name);
-                results.appendAssumeCapacity(.{
+                try temp_results.append(cmd.arena, .{
                     .name = nameZ,
                     .kind = dirent.kind,
-                    .statx = undefined,
                 });
             }
-            cmd.entries = results.items;
+
             // sort the entries on the minimal struct. This has better memory locality since it is
             // much smaller than bringing in the ourio.Statx struct
-            std.sort.pdq(MinimalEntry, temp_results.items, cmd.opts, MinimalEntry.lessThan);
+            natord.pdq(MinimalEntry, temp_results.items, cmd.opts, MinimalEntry.lessThan);
+
+            var results: std.ArrayListUnmanaged(Entry) = .empty;
+            try results.ensureUnusedCapacity(cmd.arena, temp_results.items.len);
             for (temp_results.items) |tmp| {
                 results.appendAssumeCapacity(.{
                     .name = tmp.name,
@@ -1061,16 +1084,18 @@ fn onCompletion(io: *ourio.Ring, task: ourio.Task) anyerror!void {
                 });
             }
             cmd.entries = results.items;
-
             for (cmd.entries, 0..) |*entry, i| {
                 if (i >= queue_size) {
                     cmd.entry_idx = i - 1;
                     break;
                 }
-                const path = try std.fs.path.joinZ(
-                    cmd.arena,
-                    &.{ cmd.current_directory, entry.name },
-                );
+                path_fbs.reset();
+                // const path = try std.fs.path.joinZ(
+                //     cmd.arena,
+                //     &.{ cmd.current_directory, entry.name },
+                // );
+
+                const path = try std.fs.path.joinZ(path_fbs.allocator(), &.{ cmd.current_directory, entry.name });
 
                 if (entry.kind == .sym_link) {
                     var buf: [std.fs.max_path_bytes]u8 = undefined;
@@ -1090,11 +1115,11 @@ fn onCompletion(io: *ourio.Ring, task: ourio.Task) anyerror!void {
 
         .localtime => {
             const fd = try result.open;
-
             // Largest TZ file on my system is Asia/Hebron at 4791 bytes. We allocate an amount
             // sufficiently more than that to make sure we do this in a single pass
-            const buffer = try cmd.arena.alloc(u8, 8192);
-            _ = try io.read(fd, buffer, .file, .{
+            // const buffer = try cmd.arena.alloc(u8, 8192);
+            var buffer: [8192]u8 = undefined;
+            _ = try io.read(fd, buffer[0..], .file, .{
                 .cb = onCompletion,
                 .ptr = cmd,
                 .msg = @intFromEnum(Msg.read_localtime),
@@ -1115,8 +1140,9 @@ fn onCompletion(io: *ourio.Ring, task: ourio.Task) anyerror!void {
 
             // TODO: stat this or do multiple reads. We'll never know a good bound unless we go
             // really big
-            const buffer = try cmd.arena.alloc(u8, 8192 * 2);
-            _ = try io.read(fd, buffer, .file, .{
+            // const buffer = try cmd.arena.alloc(u8, 8192 * 2);
+            var buffer: [8192 * 2]u8 = undefined;
+            _ = try io.read(fd, buffer[0..], .file, .{
                 .cb = onCompletion,
                 .ptr = cmd,
                 .msg = @intFromEnum(Msg.read_passwd),
@@ -1138,8 +1164,7 @@ fn onCompletion(io: *ourio.Ring, task: ourio.Task) anyerror!void {
             lines.reset();
             // <name>:<throwaway>:<uid><...garbage>
             while (lines.next()) |line| {
-                if (line.len == 0) continue;
-                if (std.mem.startsWith(u8, line, "#")) continue;
+                if (line.len == 0 or std.mem.startsWith(u8, line, "#")) continue;
 
                 var iter = std.mem.splitScalar(u8, line, ':');
                 const name = iter.first();
@@ -1157,14 +1182,15 @@ fn onCompletion(io: *ourio.Ring, task: ourio.Task) anyerror!void {
 
                 cmd.users.appendAssumeCapacity(user);
             }
-            std.sort.pdq(User, cmd.users.items, {}, User.lessThan);
+            natord.pdq(User, cmd.users.items, {}, User.lessThan);
         },
 
         .group => {
             const fd = try result.open;
 
-            const buffer = try cmd.arena.alloc(u8, 8192);
-            _ = try io.read(fd, buffer, .file, .{
+            // const buffer = try cmd.arena.alloc(u8, 8192);
+            var buffer: [8192]u8 = undefined;
+            _ = try io.read(fd, buffer[0..], .file, .{
                 .cb = onCompletion,
                 .ptr = cmd,
                 .msg = @intFromEnum(Msg.read_group),
@@ -1205,7 +1231,7 @@ fn onCompletion(io: *ourio.Ring, task: ourio.Task) anyerror!void {
 
                 cmd.groups.appendAssumeCapacity(group);
             }
-            std.sort.pdq(Group, cmd.groups.items, {}, Group.lessThan);
+            natord.pdq(Group, cmd.groups.items, {}, Group.lessThan);
         },
 
         .stat => {
