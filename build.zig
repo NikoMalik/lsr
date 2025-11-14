@@ -22,13 +22,14 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-    strip(exe_mod);
-
     const io_dep = b.dependency("ourio", .{ .optimize = optimize, .target = target });
-    exe_mod.addImport("ourio", io_dep.module("ourio"));
-
+    const ourio_m = io_dep.module("ourio");
+    strip(ourio_m);
+    exe_mod.addImport("ourio", ourio_m);
     const zeit_dep = b.dependency("zeit", .{ .optimize = optimize, .target = target });
-    exe_mod.addImport("zeit", zeit_dep.module("zeit"));
+    const zeit_m = zeit_dep.module("zeit");
+    strip(zeit_m);
+    exe_mod.addImport("zeit", zeit_m);
 
     const opts = b.addOptions();
     const version_string = genVersion(b) catch |err| {
@@ -37,7 +38,7 @@ pub fn build(b: *std.Build) void {
     };
     opts.addOption([]const u8, "version", version_string);
     exe_mod.addOptions("build_options", opts);
-
+    strip(exe_mod);
     const exe = b.addExecutable(.{
         .name = "lsr",
         .root_module = exe_mod,

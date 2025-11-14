@@ -1288,6 +1288,9 @@ const Icon = struct {
 
     // Entry types
     const directory: Icon = .{ .icon = "󰉋", .color = Options.Colors.blue };
+    const @".git": Icon = .{ .icon = "", .color = Options.Colors.blue };
+    const @".github": Icon = .{ .icon = "", .color = Options.Colors.blue };
+
     const drive: Icon = .{ .icon = "󰋊", .color = Options.Colors.blue };
     const file: Icon = .{ .icon = "󰈤", .color = Options.Colors.fg };
     const file_hidden: Icon = .{ .icon = "󰘓", .color = Options.Colors.fg };
@@ -1312,22 +1315,118 @@ const Icon = struct {
     const nix: Icon = .{ .icon = "󱄅", .color = "\x1b[38:2:127:185:228m" };
     const python: Icon = .{ .icon = "", .color = Options.Colors.yellow };
     const rust: Icon = .{ .icon = "", .color = "" };
+    const git: Icon = .{ .icon = "󰊢", .color = Options.Colors.fg };
     const typescript: Icon = .{ .icon = "", .color = Options.Colors.blue };
     const zig: Icon = .{ .icon = "", .color = "\x1b[38:2:247:164:29m" };
+    const cmake: Icon = .{ .icon = "", .color = "\x1b[38;2;33;153;72m" };
+    const yaml: Icon = .{ .icon = "", .color = "\x1b[38;2;204;25;31m" }; // #CC191F
+    const makefile: Icon = .{ .icon = "", .color = "\x1b[38;2;227;121;51m" }; // existing makefile
+    const java: Icon = .{ .icon = "", .color = "\x1b[38;2;0;115;150m" }; // #007396
+    const sql: Icon = .{ .icon = "", .color = "\x1b[38;2;229;101;54m" }; // #E56536
+    const gentoo: Icon = .{ .icon = "", .color = Options.Colors.fg };
+    const _void: Icon = .{ .icon = "", .color = Options.Colors.fg };
+    const docker: Icon = .{ .icon = "", .color = Options.Colors.blue };
+    const c: Icon = .{ .icon = "", .color = "\x1b[38;2;127;139;153m" }; // #7F8B99
+    const c_h: Icon = .{ .icon = "", .color = "" }; // #7F8B99
+    const cpp_h: Icon = .{ .icon = "", .color = "" };
+
+    const cpp: Icon = .{ .icon = "", .color = "\x1b[38;2;127;139;153m" }; // #00599C
+    const c_sharp: Icon = .{ .icon = "󰌛", .color = "\x1b[38;2;0;89;159m" };
+    const linux: Icon = .{ .icon = "", .color = "\x1b[38;2;127;139;153m" };
+    const mac: Icon = .{ .icon = "", .color = "\x1b[38;2;255;255;255m" };
+    const clangd: Icon = .{ .icon = "󱁻", .color = Options.Colors.fg };
+    const config: Icon = .{ .icon = "", .color = Options.Colors.blue };
+    const home: Icon = .{ .icon = "󱂵", .color = Options.Colors.blue };
+    const src: Icon = .{ .icon = "󰣞", .color = Options.Colors.blue };
+    const build: Icon = .{ .icon = "󱧼", .color = Options.Colors.blue };
+    const gitlab_ci: Icon = .{ .icon = "", .color = Options.Colors.fg };
+    const todo: Icon = .{ .icon = "", .color = Options.Colors.green };
+    const fish: Icon = .{ .icon = "", .color = Options.Colors.cyan };
+    const code_of_conduct: Icon = .{ .icon = "", .color = Options.Colors.purple };
+    const documents: Icon = .{ .icon = "󰲂", .color = Options.Colors.blue };
+    const download: Icon = .{ .icon = "󰉍", .color = Options.Colors.blue };
+    const pkg: Icon = .{ .icon = "", .color = Options.Colors.blue };
+    const _cmd: Icon = .{ .icon = "", .color = Options.Colors.blue };
+    const _internal: Icon = .{ .icon = "󱇧", .color = Options.Colors.blue };
 
     const by_name: std.StaticStringMap(Icon) = .initComptime(.{
+        .{ "Documents", Icon.documents },
+        .{ "grandle", Icon.java },
+        .{ "grandle.properties", Icon.java },
+        .{ "gradlew", Icon.java },
+        .{ "gradlew.bat", Icon.java },
+        .{ "Downloads", Icon.download },
         .{ "flake.lock", Icon.nix },
         .{ "go.mod", Icon.go },
         .{ "go.sum", Icon.go },
+        .{ "go.work", Icon.go },
+        .{ "go.work.sum", Icon.go },
+
+        .{ "Makefile", Icon.makefile },
+        .{ "makefile", Icon.makefile },
+        .{ "build.gradle", Icon.java },
+        .{ ".gitattributes", Icon.git },
+        .{ ".gitconfig", Icon.git },
+        .{ ".gitignore", Icon.git },
+        .{ ".gitmodules", Icon.git },
+        .{ ".gitignore_global", Icon.git },
+        .{ "TODO", Icon.todo },
+        .{ "TODO.md", Icon.todo },
+
+        .{ "CMakeCache.txt", Icon.cmake },
+        .{ "CMakeLists.txt", Icon.cmake },
+        .{ "make.conf", Icon.gentoo },
+        .{ "Dockerfile", Icon.docker },
+        .{ "dockerfile", Icon.docker },
+        .{ "CODE_OF_CONDUCT", Icon.code_of_conduct },
+        .{ "CODE_OF_CONDUCT.md", Icon.code_of_conduct },
+
+        .{ "compose.yaml", Icon.docker },
+        .{ "compose.yml", Icon.docker },
+
+        .{ "docker-compose.yaml", Icon.docker },
+        .{ ".dockerignore", Icon.docker },
+
+        .{ "docker-compose.yml", Icon.docker },
+        .{ ".CFUserTextEncoding", Icon.mac },
+        .{ "clang-tidy", Icon.clangd },
+        .{ "clang-format", Icon.clangd },
+        .{ ".DS_Store", Icon.mac },
+        .{ ".CFUserTextEncoding", Icon.mac },
+        .{ "localized", Icon.mac },
+        .{ ".gitlab-ci.yml", Icon.gitlab_ci },
     });
 
     const by_extension: std.StaticStringMap(Icon) = .initComptime(.{
         .{ "cjs", Icon.javascript },
+        .{ "cs", Icon.c_sharp },
+        .{ "c", Icon.c },
+        .{ "h", Icon.c_h },
+        .{ "h++", Icon.cpp_h },
+        .{ "hpp", Icon.cpp_h },
+
+        .{ "cpp", Icon.cpp },
+        .{ "fish", Icon.fish },
+        .{ "cp", Icon.cpp },
+
+        .{ "a", Icon.linux },
+        .{ "so", Icon.linux },
+        .{ "ko", Icon.linux },
+        .{ "cxx", Icon.cpp },
+        .{ "cc", Icon.cpp },
+        .{ "java", Icon.java },
+        .{ "git", Icon.git },
+        .{ "ebuild", Icon.gentoo },
+        .{ "sql", Icon.sql },
+        .{ "yaml", Icon.yaml },
+        .{ "yml", Icon.yaml },
         .{ "css", Icon.css },
         .{ "drv", Icon.nix },
-        .{ "gif", Icon.image },
         .{ "go", Icon.go },
         .{ "html", Icon.html },
+        .{ "cmake", Icon.cmake },
+        .{ "cmake.in", Icon.cmake },
+        .{ "gif", Icon.image },
         .{ "jpeg", Icon.image },
         .{ "jpg", Icon.image },
         .{ "js", Icon.javascript },
@@ -1350,11 +1449,46 @@ const Icon = struct {
         .{ "zon", Icon.zig },
     });
 
-    fn get(entry: Entry) Icon {
+    inline fn get(entry: Entry) Icon {
         // 1. By name
         // 2. By type
         // 3. By extension
         if (by_name.get(entry.name)) |icon| return icon;
+
+        if (eql(entry.name, ".git") and entry.kind == .directory) {
+            return Icon.@".git";
+        }
+
+        if (eql(entry.name, ".github") and entry.kind == .directory) {
+            return Icon.@".github";
+        }
+
+        if (eql(entry.name, "config") and entry.kind == .directory or (eql(entry.name, "etc") and entry.kind == .directory) or (eql(entry.name, "include") and entry.kind == .directory) or eql(entry.name, "configs") and entry.kind == .directory) {
+            return Icon.config;
+        }
+
+        if (eql(entry.name, "home") and entry.kind == .directory) {
+            return Icon.home;
+        }
+
+        if (eql(entry.name, "src") and entry.kind == .directory) {
+            return Icon.src;
+        }
+
+        if (eql(entry.name, "pkg") and entry.kind == .directory) {
+            return Icon.pkg;
+        }
+
+        if (eql(entry.name, "cmd") and entry.kind == .directory) {
+            return Icon._cmd;
+        }
+        if (eql(entry.name, "internal") and entry.kind == .directory) {
+            return Icon._internal;
+        }
+
+        if (eql(entry.name, "build") and entry.kind == .directory) {
+            return Icon.build;
+        }
 
         switch (entry.kind) {
             .block_device => return drive,
