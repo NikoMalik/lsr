@@ -1346,7 +1346,7 @@ const Icon = struct {
     const documents: Icon = .{ .icon = "󰲂", .color = Options.Colors.blue };
     const download: Icon = .{ .icon = "󰉍", .color = Options.Colors.blue };
     const pkg: Icon = .{ .icon = "", .color = Options.Colors.blue };
-    const _cmd: Icon = .{ .icon = "", .color = Options.Colors.blue };
+    // const _cmd: Icon = .{ .icon = "", .color = Options.Colors.blue };
     const _internal: Icon = .{ .icon = "󱇧", .color = Options.Colors.blue };
 
     const by_name: std.StaticStringMap(Icon) = .initComptime(.{
@@ -1376,6 +1376,9 @@ const Icon = struct {
         .{ "CMakeCache.txt", Icon.cmake },
         .{ "CMakeLists.txt", Icon.cmake },
         .{ "make.conf", Icon.gentoo },
+        .{ "package.accept_keywords", Icon.gentoo },
+        .{ "package.license", Icon.gentoo },
+
         .{ "Dockerfile", Icon.docker },
         .{ "dockerfile", Icon.docker },
         .{ "CODE_OF_CONDUCT", Icon.code_of_conduct },
@@ -1479,9 +1482,6 @@ const Icon = struct {
             return Icon.pkg;
         }
 
-        if (eql(entry.name, "cmd") and entry.kind == .directory) {
-            return Icon._cmd;
-        }
         if (eql(entry.name, "internal") and entry.kind == .directory) {
             return Icon._internal;
         }
