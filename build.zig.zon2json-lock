@@ -1,9 +1,9 @@
 {
-  "ourio-0.0.0-_s-z0dYfAgAO8Xs00nGWuQh95-DFnSFQZ95xM0JpCXbx": {
+  "ourio-0.0.0-_s-z0VgsAgB4yw-gCIcr7fFiPmt-C_ADiynJp4Zl1Mgl": {
     "name": "ourio",
-    "url": "git+https://github.com/NikoMalik/ourio#ba66a83034483e9e0602d05f8ee0d5b46e624ee9",
-    "hash": "sha256-l9AC6zyNMFWIoaoGj2H0XxmFOBoe1ECbUHXZjOR7zd8=",
-    "rev": "ba66a83034483e9e0602d05f8ee0d5b46e624ee9"
+    "url": "git+https://github.com/NikoMalik/ourio#091bb8893d03d002652631155eec5f429162be8d",
+    "hash": "sha256-wq1vtFT/R/HrMBRm5YddU7gvMmyyDY/veGiErNIJTm4=",
+    "rev": "091bb8893d03d002652631155eec5f429162be8d"
   },
   "tls-0.1.0-ER2e0oNIBQDOLwOgkiNYg218M3CfQ8Y63KnacWSDolK3": {
     "name": "tls",
