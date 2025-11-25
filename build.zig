@@ -22,7 +22,14 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .optimize = optimize,
     });
-    const io_dep = b.dependency("ourio", .{ .optimize = optimize, .target = target });
+    const io_dep = b.dependency("ourio", .{
+        .optimize = optimize,
+        .target = target,
+    });
+    const tls = b.option(bool, "tls", "Enable a special feature") orelse false;
+
+    const io_options = io_dep.builder.addOptions();
+    io_options.addOption(bool, "tls", tls);
     const ourio_m = io_dep.module("ourio");
     strip(ourio_m);
     exe_mod.addImport("ourio", ourio_m);
@@ -36,7 +43,9 @@ pub fn build(b: *std.Build) void {
         std.debug.print("{}", .{err});
         @compileError("couldn't get version");
     };
+
     opts.addOption([]const u8, "version", version_string);
+
     exe_mod.addOptions("build_options", opts);
     strip(exe_mod);
     const exe = b.addExecutable(.{

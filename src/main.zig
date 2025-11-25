@@ -4,9 +4,6 @@ const ourio = @import("ourio");
 const zeit = @import("zeit");
 const natord = @import("natord.zig");
 const build_options = @import("build_options");
-// const grp = @cImport({
-//     @cInclude("grp.h");
-// });
 
 const posix = std.posix;
 
@@ -814,16 +811,6 @@ const Command = struct {
         for (self.users.items) |user| {
             if (user.uid == uid) return user;
         }
-        // if (std.c.getpwuid(uid)) |user| {
-        //     if (user.name) |name| {
-        //         const new_user = User{
-        //             .uid = uid,
-        //             .name = std.mem.span(name),
-        //         };
-        //         try self.users.append(self.arena, new_user);
-        //         return new_user;
-        //     }
-        // }
         return null;
     }
 
