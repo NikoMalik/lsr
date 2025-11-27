@@ -26,10 +26,8 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
         .target = target,
     });
-    const tls = b.option(bool, "tls", "Enable a special feature") orelse false;
+    _ = io_dep.builder.addUserInputOption("tls", "false") catch unreachable;
 
-    const io_options = io_dep.builder.addOptions();
-    io_options.addOption(bool, "tls", tls);
     const ourio_m = io_dep.module("ourio");
     strip(ourio_m);
     exe_mod.addImport("ourio", ourio_m);
