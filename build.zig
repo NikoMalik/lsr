@@ -25,9 +25,9 @@ pub fn build(b: *std.Build) void {
     const io_dep = b.dependency("ourio", .{
         .optimize = optimize,
         .target = target,
+        .tls = false,
     });
-    _ = io_dep.builder.addUserInputOption("tls", "false") catch unreachable;
-
+    // _ = io_dep.builder.addUserInputOption("tls", "false") catch unreachable;
     const ourio_m = io_dep.module("ourio");
     strip(ourio_m);
     exe_mod.addImport("ourio", ourio_m);
