@@ -1222,25 +1222,22 @@ fn onCompletion(io: *ourio.Ring, task: ourio.Task) anyerror!void {
         },
 
         .stat => {
-            _ = result.statx catch |err| {
+            _ = result.statx catch {
                 const entry: *Entry = @fieldParentPtr("statx", task.req.statx.result);
-                const symlink = cmd.symlinks.getPtr(entry.name) orelse return err;
+                const symlink = cmd.symlinks.getOrPutAssumeCapacity(entry.name);
 
-                if (!symlink.exists) {
-                    // We already lstated this and found an error. Just zero out statx and move
-                    // along
+                if (!symlink.found_existing) {
                     entry.statx = std.mem.zeroInit(ourio.Statx, entry.statx);
-                    return;
+                    symlink.value_ptr.* = .{ .exists = false, .name = "[broken]" };
+                } else {
+                    symlink.value_ptr.exists = false;
                 }
-
-                symlink.exists = false;
 
                 _ = try io.lstat(task.req.statx.path, task.req.statx.result, .{
                     .cb = onCompletion,
                     .ptr = cmd,
                     .msg = @intFromEnum(Msg.stat),
                 });
-                return;
             };
 
             if (cmd.entry_idx >= cmd.entries.len) return;
