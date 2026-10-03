@@ -42,9 +42,27 @@ pub fn build(b: *std.Build) void {
         @compileError("couldn't get version");
     };
 
+    const folly_memcpy = b.option(bool, "folly-memcpy", "override memcpy/memmove with folly AVX2 asm (x86_64+AVX2 only)") orelse true;
+    const has_avx2 = target.result.cpu.arch == .x86_64 and
+        std.Target.x86.featureSetHas(target.result.cpu.features, .avx2);
+
     opts.addOption([]const u8, "version", version_string);
 
     exe_mod.addOptions("build_options", opts);
+    if (has_avx2 and folly_memcpy) {
+        exe_mod.addCSourceFile(.{
+            .file = b.path("deps/folly/memcpy.S"),
+            .flags = &.{ "-mavx2", "-D__AVX2__=1", "-DFOLLY_MEMCPY_IS_MEMCPY" },
+        });
+    }
+
+    if (has_avx2) {
+        exe_mod.addCSourceFile(.{
+            .file = b.path("deps/folly/memset.S"),
+            .flags = &.{ "-mavx2", "-D__AVX2__=1", "-DFOLLY_MEMSET_IS_MEMSET" },
+        });
+    }
+
     strip(exe_mod);
     const exe = b.addExecutable(.{
         .name = "lsr",
@@ -114,7 +132,7 @@ fn strip_step(step: *std.Build.Step.Compile) void {
     if (step.root_module.optimize != .Debug and step.root_module.optimize != .ReleaseSafe) {
         step.use_llvm = true;
         step.lto = .full;
-        step.bundle_compiler_rt = true;
+        step.bundle_compiler_rt = false;
         step.pie = false;
         step.bundle_ubsan_rt = false;
         step.link_gc_sections = true;

@@ -146,13 +146,7 @@ pub fn main() !void {
     var sfb = std.heap.stackFallback(1 << 20, arena.allocator());
     const allocator = sfb.get();
 
-    var cmd: Command = .{ .arena = allocator };
-
     const _stdout = std.fs.File.stdout();
-
-    cmd.opts.winsize = getWinsize(_stdout.handle);
-
-    cmd.opts.shortview = if (cmd.opts.isatty()) .columns else .oneline;
 
     var stdout_buffer: [4096]u8 = undefined;
 
@@ -160,6 +154,15 @@ pub fn main() !void {
 
     var stdout = _stdout.writer(&stdout_buffer);
     var stderr = std.fs.File.stderr().writer(&stderr_buffer).interface;
+    var cmd: Command = .{
+        .arena = allocator,
+        .stderr = &stderr,
+    };
+
+    cmd.opts.winsize = getWinsize(_stdout.handle);
+
+    cmd.opts.shortview = if (cmd.opts.isatty()) .columns else .oneline;
+
     // var bw = std.Io.Writer.buffered
     var bw = &stdout.interface;
 
@@ -806,6 +809,7 @@ const Command = struct {
     tz: ?zeit.TimeZone = null,
     groups: std.ArrayListUnmanaged(Group) = .empty,
     users: std.ArrayListUnmanaged(User) = .empty,
+    stderr: *std.Io.Writer,
 
     fn getUser(self: *Command, uid: posix.uid_t) !?User {
         for (self.users.items) |user| {
@@ -1007,6 +1011,17 @@ fn onCompletion(io: *ourio.Ring, task: ourio.Task) anyerror!void {
                         );
                         return;
                     },
+                    error.AccessDenied => {
+                        try cmd.stderr.print("cannot access '{s}': Permission denied\n", .{task.req.open.path});
+                        try cmd.stderr.flush();
+                        return;
+                    },
+                    error.FileNotFound => {
+                        try cmd.stderr.print("cannot access '{s}': No such file or directory\n", .{task.req.open.path});
+                        try cmd.stderr.flush();
+                        return;
+                    },
+
                     else => return err,
                 }
             };
@@ -1071,11 +1086,12 @@ fn onCompletion(io: *ourio.Ring, task: ourio.Task) anyerror!void {
                 });
             }
             cmd.entries = results.items;
-            for (cmd.entries, 0..) |*entry, i| {
-                if (i >= queue_size) {
-                    cmd.entry_idx = i - 1;
-                    break;
-                }
+            cmd.entry_idx = @min(cmd.entries.len, queue_size - 4);
+            for (cmd.entries[0..cmd.entry_idx]) |*entry| {
+                // if (i >= queue_size) {
+                //     cmd.entry_idx = i - 1;
+                //     break;
+                // }
                 path_fbs.reset();
                 // const path = try std.fs.path.joinZ(
                 //     cmd.arena,
